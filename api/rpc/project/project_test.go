@@ -17,7 +17,6 @@ const (
 )
 
 var (
-	port          string
 	etcdEndpoints = []string{etcdDefaultEndpoint}
 	proj          *Proj
 	sampleProject = &Project{RepoId: 12345, OwnerName: "amp", RepoName: "amp-repo", Token: "FakeToken"}
@@ -31,12 +30,18 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func TestCreate(t *testing.T) {
-	// Cleanup previous tests
-	//	proj.Delete(context.Background(), &DeleteRequest{RepoId: sampleProject.RepoId})
+func create() (*CreateReply, error) {
 	req := &CreateRequest{Project: sampleProject}
-	resp, err := proj.Create(context.Background(), req)
+	return proj.Create(context.Background(), req)
+}
 
+func delete() (*DeleteReply, error) {
+	return proj.Delete(context.Background(), &DeleteRequest{RepoId: sampleProject.RepoId})
+}
+
+func TestCreate(t *testing.T) {
+	delete()
+	resp, err := create()
 	if err != nil {
 		t.Error(err)
 	}
@@ -45,8 +50,18 @@ func TestCreate(t *testing.T) {
 	}
 }
 
+func TestCreateAlreadyExists(t *testing.T) {
+	delete()
+	create()
+	resp, err := create()
+	// Should result in a duplicate entry
+	if err == nil {
+		t.Errorf("Expected Duplicate Entry, got %v \n", resp)
+	}
+}
+
 func TestDelete(t *testing.T) {
-	resp, err := proj.Delete(context.Background(), &DeleteRequest{RepoId: sampleProject.RepoId})
+	resp, err := delete()
 	if err != nil {
 		t.Error(err)
 	}
@@ -55,6 +70,7 @@ func TestDelete(t *testing.T) {
 	}
 }
 
+// Create the ProjectServer as a local struct that can be excercised directly over the call stack
 func createProjectServer() *Proj {
 	//Create the config
 	var proj = &Proj{}
