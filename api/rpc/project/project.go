@@ -1,40 +1,42 @@
 package project
 
-// import (
-//
-// 	"encoding/json"
-// 	"golang.org/x/net/context"
-// 	"log"
-// )
-//
-// const (
-// 	keySpace = "/amp/project"
-// )
-//
-// // Service is used to implement ProjectServer
-// type Service struct {
-// }
-//
-// // CreateProject implements ProjectServer
-// func (s *Service) Create(ctx context.Context, in *CreateRequest) (*CreateReply, error) {
-// 	// Storing the project
-// 	etc.Put(keySpace, in)
-//
-// 	// Iterate through all entries
-// 	all, err := etc.All(keySpace)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	for _, node := range all {
-// 		// Deserialize node value into a CreateRequest (could also be just a map[string]interface{}).
-// 		var cr project.CreateRequest
-// 		err := json.Unmarshal([]byte(node.Value), &cr)
-// 		cr.Id = node.Key
-// 		if err != nil {
-// 			return nil, err
-// 		}
-// 		log.Printf("%+v\n", cr)
-// 	}
-//
-// 	return &CreateReply{Message: "Hello " + in.Name}, nil
-// }
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/appcelerator/amp/data/storage"
+)
+
+const (
+	defTimeout = 5 * time.Second
+	prefix     = "project"
+)
+
+// Proj structure to implement StatsServer interface
+type Proj struct {
+	Store storage.Interface
+}
+
+// Create adds a new entry to the k,v data store
+func (p *Proj) Create(ctx context.Context, req *CreateRequest) (*CreateReply, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), defTimeout)
+	key := fmt.Sprintf("%s/%v", prefix, req.Project.RepoId)
+	ttl := int64(0)
+	reply := &CreateReply{Project: &Project{}}
+	err := p.Store.Create(ctx, key, req.Project, reply.Project, ttl)
+	// cancel timeout (release resources) if operation completes before timeout
+	defer cancel()
+	return reply, err
+}
+
+//Delete removes the entry for the specified Key
+func (p *Proj) Delete(ctx context.Context, req *DeleteRequest) (*DeleteReply, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), defTimeout)
+	key := fmt.Sprintf("%s/%v", prefix, req.RepoId)
+	reply := &DeleteReply{Project: &Project{}}
+	err := p.Store.Delete(ctx, key, reply.Project)
+	// cancel timeout (release resources) if operation completes before timeout
+	defer cancel()
+	return reply, err
+}

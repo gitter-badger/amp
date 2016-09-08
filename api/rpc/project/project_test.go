@@ -1,30 +1,70 @@
 package project
 
-// import (
-// 	"github.com/satori/go.uuid"
-// 	"golang.org/x/net/context"
-// 	"google.golang.org/grpc"
-// 	"testing"
-// )
-//
-// const (
-// 	address = "localhost:50101"
-// )
-//
-// func TestShouldSucceedWhenProvidingAValidCreateRequest(t *testing.T) {
-// 	// Set up a connection to the server.
-// 	conn, err := grpc.Dial(address, grpc.WithInsecure())
-// 	if err != nil {
-// 		t.Fatalf("did not connect: %v", err)
-// 	}
-//
-// 	// Contact the server and print out its response.
-// 	c := project.NewProjectClient(conn)
-// 	r, err := c.Create(context.Background(), &project.CreateRequest{Name: "test-project-" + uuid.NewV4().String()})
-// 	if err != nil {
-// 		t.Fatalf("could not greet: %v", err)
-// 	}
-// 	t.Logf("Greeting: %s", r.Message)
-//
-// 	conn.Close()
-// }
+import (
+	"context"
+	"log"
+	"os"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/appcelerator/amp/data/storage/etcd"
+	"github.com/gogo/protobuf/proto"
+)
+
+const (
+	etcdDefaultEndpoint = "http://localhost:2379"
+)
+
+var (
+	port          string
+	etcdEndpoints = []string{etcdDefaultEndpoint}
+	proj          *Proj
+	sampleProject = &Project{RepoId: 12345, OwnerName: "amp", RepoName: "amp-repo", Token: "FakeToken"}
+)
+
+func TestMain(m *testing.M) {
+	log.SetOutput(os.Stdout)
+	log.SetFlags(log.Lshortfile)
+	log.SetPrefix("test: ")
+	proj = createProjectServer()
+	os.Exit(m.Run())
+}
+
+func TestCreate(t *testing.T) {
+	// Cleanup previous tests
+	//	proj.Delete(context.Background(), &DeleteRequest{RepoId: sampleProject.RepoId})
+	req := &CreateRequest{Project: sampleProject}
+	resp, err := proj.Create(context.Background(), req)
+
+	if err != nil {
+		t.Error(err)
+	}
+	if proto.Equal(resp.Project, sampleProject) {
+		t.Errorf("expected %v, got %v", sampleProject, resp.Project)
+	}
+}
+
+func TestDelete(t *testing.T) {
+	resp, err := proj.Delete(context.Background(), &DeleteRequest{RepoId: sampleProject.RepoId})
+	if err != nil {
+		t.Error(err)
+	}
+	if !proto.Equal(resp.Project, sampleProject) {
+		t.Errorf("expected %v, got %v", sampleProject, resp.Project)
+	}
+}
+
+func createProjectServer() *Proj {
+	//Create the config
+	var proj = &Proj{}
+
+	if endpoints := os.Getenv("endpoints"); endpoints != "" {
+		etcdEndpoints = strings.Split(endpoints, ",")
+	}
+	proj.Store = etcd.New(etcdEndpoints, "amp")
+	if err := proj.Store.Connect(5 * time.Second); err != nil {
+		panic(err)
+	}
+	return proj
+}
